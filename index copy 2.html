@@ -34,11 +34,6 @@
             margin-top: 20px;
             border-radius: 10px;
         }
-        #status {
-            color: #0077cc;
-            font-weight: bold;
-            margin: 10px 0;
-        }
     </style>
 </head>
 <body>
@@ -47,44 +42,49 @@
         <input type="file" id="imageInput" accept="image/*" capture="environment">
         <br>
         <button onclick="scanText()">OCR Scan</button>
-        <button id="submitBtn" onclick="submitData()">গুগল শীটে জমা করো</button>
+        <button onclick="submitData()">গুগল শীটে জমা করো</button>
         <img id="preview">
         <textarea id="result" placeholder="ওসিআরের ফলাফল এখানে দেখাবে..."></textarea>
-        <div id="status"></div>
     </div>
 
     <script>
         const API_KEY = "K83517729888957";
-        // 👇 নতুন Web App URL বসাও (Deploy থেকে পাওয়া URL)
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyAXOBTG-KBngdyKNVAuk7hsRTB2FchbB_Fiw0rcXneYRWDlHOzywvE5PXrTB0Kmok3ow/exec";
+        // 👇 তোমার Google Apps Script Web App URL বসাও
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyC_t-sae7z7XylrrYC-oCdCeOAUMe-Ql3UTqZkJYzz3CHgwtlTCI4ahvZL7Ce1IVBRNg/exec";
 
-        let base64Image = ""; // কমপ্রেস করা বেস৬৪ ইমেজ
+        let base64Image = "";  // এখন কমপ্রেস করা বেস৬৪ ইমেজ রাখবে
 
         document.getElementById('imageInput').addEventListener('change', function (e) {
             const file = e.target.files[0];
             if (!file) return;
 
+            // প্রথমে প্রিভিউ দেখানোর জন্য আসল ছবি লোড করো
             const reader = new FileReader();
             reader.onload = function () {
                 document.getElementById('preview').src = reader.result;
             };
             reader.readAsDataURL(file);
 
+            // ছবি কমপ্রেস করে base64Image-এ রাখো
             compressImage(file, 1200, 1200, 0.7).then(compressedBase64 => {
-                base64Image = compressedBase64;
-                console.log("ছবি কমপ্রেস: " + Math.round(compressedBase64.length / 1024) + " KB");
+                base64Image = compressedBase64; // কমপ্রেসড বেস৬৪ (data:image/jpeg;base64,...)
+                console.log("ছবি কমপ্রেস সম্পন্ন, সাইজ: " + Math.round(compressedBase64.length / 1024) + " KB");
             });
         });
 
+        // ইমেজ কমপ্রেস করার ফাংশন
         function compressImage(file, maxWidth, maxHeight, quality) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = function (e) {
                     const img = new Image();
                     img.onload = function () {
+                        // ক্যানভাস তৈরি
                         const canvas = document.createElement('canvas');
                         let width = img.width;
                         let height = img.height;
+
+                        // আনুপাতিক রিসাইজ
                         if (width > maxWidth) {
                             height = Math.round((height * maxWidth) / width);
                             width = maxWidth;
@@ -93,10 +93,13 @@
                             width = Math.round((width * maxHeight) / height);
                             height = maxHeight;
                         }
+
                         canvas.width = width;
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
+
+                        // JPEG বেস৬৪ আউটপুট
                         const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
                         resolve(compressedBase64);
                     };
@@ -114,10 +117,11 @@
                     alert("দয়া করে আগে ছবি সিলেক্ট করো!");
                     return;
                 }
-                console.log("ওসিআর শুরু...");
+
+                console.log("ওসিআর শুরু (ocr.space)...");
                 const formData = new FormData();
                 formData.append("apikey", API_KEY);
-                formData.append("base64Image", base64Image);
+                formData.append("base64Image", base64Image); // কমপ্রেসড ইমেজ পাঠানো হচ্ছে
                 formData.append("language", "auto");
                 formData.append("OCREngine", "3");
 
@@ -125,11 +129,15 @@
                     method: "POST",
                     body: formData
                 });
+
                 const data = await response.json();
+                console.log(data);
+
                 if (data?.IsErroredOnProcessing) {
                     alert("ওসিআর ত্রুটি: " + (data.ErrorMessage || "অজানা"));
                     return;
                 }
+
                 const text = data?.ParsedResults?.[0]?.ParsedText || "";
                 if (text.trim() === "") {
                     alert("কোনো টেক্সট পাওয়া যায়নি। ছবির মান বা সাইজ চেক করো।");
@@ -139,55 +147,43 @@
                 }
             } catch (err) {
                 console.error(err);
-                alert("ওসিআর ব্যর্থ হয়েছে। ইন্টারনেট চেক করো।");
+                alert("ওসিআর ব্যর্থ হয়েছে। ইন্টারনেট সংযোগ দেখো।");
             }
         }
 
-        // ---------- সিম্পল POST (ফর্ম ডেটা) ইমেজ সহ ----------
-        async function submitData() {
+        // JSONP পদ্ধতিতে গুগল শীটে ডাটা পাঠানো (কোনো CORS সমস্যা নেই)
+        function submitData() {
             const text = document.getElementById('result').value;
             if (!text) {
-                alert("জমা দেওয়ার মতো টেক্সট নেই!");
-                return;
-            }
-            if (!base64Image) {
-                alert("ছবি পাওয়া যায়নি। আবার ছবি সিলেক্ট করো।");
+                alert("জমা দেওয়ার মতো কোনো টেক্সট নেই!");
                 return;
             }
 
-            document.getElementById('status').textContent = "⏳ জমা হচ্ছে...";
-            const submitBtn = document.getElementById('submitBtn');
-            submitBtn.disabled = true;
-
-            try {
-                // URL-encoded ফর্ম বডি তৈরি
-                const params = new URLSearchParams();
-                params.append('text', text);
-                params.append('image', base64Image);  // পুরো base64 string
-
-                const response = await fetch(SCRIPT_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: params
-                });
-
-                const result = await response.json();
-                document.getElementById('status').textContent = "";
-                submitBtn.disabled = false;
-
-                if (result.result === 'success') {
-                    alert("✅ সফলভাবে জমা হয়েছে!\nছবির লিংক: " + (result.imageUrl || ""));
+            const callbackName = 'jsonpCallback_' + Date.now();
+            window[callbackName] = function(response) {
+                if (response.result === 'success') {
+                    alert("গুগল শীটে সফলভাবে জমা হয়েছে!");
                 } else {
-                    alert("জমা দেওয়া যায়নি: " + (result.message || ''));
+                    alert("জমা দেওয়া যায়নি: " + (response.message || ''));
                 }
-            } catch (err) {
-                console.error(err);
-                document.getElementById('status').textContent = "";
-                submitBtn.disabled = false;
-                alert("জমা দিতে ব্যর্থ। কনসোল দেখো।");
-            }
+                document.body.removeChild(scriptTag);
+                delete window[callbackName];
+            };
+
+            const url = SCRIPT_URL + '?text=' + encodeURIComponent(text) + '&callback=' + callbackName;
+            const scriptTag = document.createElement('script');
+            scriptTag.src = url;
+            document.body.appendChild(scriptTag);
+
+            setTimeout(() => {
+                if (window[callbackName]) {
+                    alert("অনুরোধ টাইমআউট হয়েছে। নেটওয়ার্ক চেক করো।");
+                    delete window[callbackName];
+                    if (document.body.contains(scriptTag)) {
+                        document.body.removeChild(scriptTag);
+                    }
+                }
+            }, 10000);
         }
     </script>
 </body>
