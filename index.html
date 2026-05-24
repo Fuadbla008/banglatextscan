@@ -67,7 +67,7 @@
 
         const API_KEY = "K83517729888957";
 
-        const SCRIPT_URL = "YOUR_GOOGLE_APPS_SCRIPT_URL";
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyrOR3sH1dVQ3NCrP7pjueLYrozXME86rcD_vbcXqtgvZzQOkmC2Q7CcqncpYVGXvGRyQ/exec";
 
         let base64Image = "";
 
@@ -79,7 +79,7 @@
 
             reader.onloadend = function () {
 
-                base64Image = reader.result.split(',')[1];
+                base64Image = reader.result;
 
                 document.getElementById('preview').src = reader.result;
             };
@@ -97,33 +97,20 @@
                     return;
                 }
 
-                console.log("Scanning started");
+                console.log("Scanning started (ocr.space)");
 
-                const body = {
-                    requests: [
-                        {
-                            image: {
-                                content: base64Image
-                            },
-                            features: [
-                                {
-                                    type: "TEXT_DETECTION"
-                                }
-                            ]
-                        }
-                    ]
-                };
+                const formData = new FormData();
+                formData.append("apikey", API_KEY);
+                formData.append("base64Image", base64Image);
+                // Use automatic language detection to avoid invalid language codes
+                formData.append("language", "auto");
+                // Use OCR Engine 3 for best language support (supports many languages)
+                formData.append("OCREngine", "3");
 
-                const response = await fetch(
-                    `https://vision.googleapis.com/v1/images:annotate?key=${API_KEY}`,
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
-                        body: JSON.stringify(body)
-                    }
-                );
+                const response = await fetch("https://api.ocr.space/parse/image", {
+                    method: "POST",
+                    body: formData
+                });
 
                 console.log("Response received");
 
@@ -131,13 +118,13 @@
 
                 console.log(data);
 
-                if (data.error) {
-                    alert(data.error.message);
+                if (data?.IsErroredOnProcessing) {
+                    const msg = data?.ErrorMessage || data?.ErrorDetails || "OCR.space error";
+                    alert(msg);
                     return;
                 }
 
-                const text =
-                    data.responses[0]?.fullTextAnnotation?.text || "No text found";
+                const text = data?.ParsedResults?.[0]?.ParsedText || "No text found";
 
                 document.getElementById('result').value = text;
 
@@ -152,7 +139,6 @@
         }
 
         async function submitData() {
-
             const text = document.getElementById('result').value;
 
             if (!text) {
@@ -160,18 +146,25 @@
                 return;
             }
 
-            await fetch(SCRIPT_URL, {
+            try {
+                // GET রিকোয়েস্টের জন্য URL তৈরি (text এনকোড করা)
+                const url = SCRIPT_URL + '?text=' + encodeURIComponent(text);
 
-                method: "POST",
+                const response = await fetch(url, {
+                    method: "GET"
+                    // কোনো headers বা body লাগবে না
+                });
 
-                body: JSON.stringify({
-                    text: text
-                })
-
-            });
-
-            alert("Saved To Google Sheet");
-
+                const result = await response.json();
+                if (result.result === 'success') {
+                    alert("Saved To Google Sheet");
+                } else {
+                    alert("Failed: " + (result.message || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Submission failed. Check console.");
+            }
         }
 
     </script>
