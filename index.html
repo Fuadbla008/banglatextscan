@@ -2,6 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bangla OCR Scanner</title>
     <style>
         body {
@@ -37,42 +38,90 @@
 </head>
 <body>
     <div class="box">
-        <h2>Bangla OCR Scanner</h2>
+        <h2>📷 বাংলা ওসিআর স্ক্যানার</h2>
         <input type="file" id="imageInput" accept="image/*" capture="environment">
         <br>
         <button onclick="scanText()">OCR Scan</button>
-        <button onclick="submitData()">Submit To Google Sheet</button>
+        <button onclick="submitData()">গুগল শীটে জমা করো</button>
         <img id="preview">
-        <textarea id="result" placeholder="OCR Result"></textarea>
+        <textarea id="result" placeholder="ওসিআরের ফলাফল এখানে দেখাবে..."></textarea>
     </div>
 
     <script>
         const API_KEY = "K83517729888957";
-        // নিচের URL-টা তোমার নতুন ডেপ্লয় করা Apps Script-এর URL দিয়ে বদলাও
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyi6eulWYhYeciNkmj2CVe-bvJX87bA0ObaueD1O03OBzq8Pv-s0HBJ8RmK8-U-91LLRg/exec"; // ← এখানে বসাও
+        // 👇 তোমার Google Apps Script Web App URL বসাও
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyC_t-sae7z7XylrrYC-oCdCeOAUMe-Ql3UTqZkJYzz3CHgwtlTCI4ahvZL7Ce1IVBRNg/exec";
 
-        let base64Image = "";
+        let base64Image = "";  // এখন কমপ্রেস করা বেস৬৪ ইমেজ রাখবে
 
         document.getElementById('imageInput').addEventListener('change', function (e) {
             const file = e.target.files[0];
+            if (!file) return;
+
+            // প্রথমে প্রিভিউ দেখানোর জন্য আসল ছবি লোড করো
             const reader = new FileReader();
-            reader.onloadend = function () {
-                base64Image = reader.result;
+            reader.onload = function () {
                 document.getElementById('preview').src = reader.result;
             };
             reader.readAsDataURL(file);
+
+            // ছবি কমপ্রেস করে base64Image-এ রাখো
+            compressImage(file, 1200, 1200, 0.7).then(compressedBase64 => {
+                base64Image = compressedBase64; // কমপ্রেসড বেস৬৪ (data:image/jpeg;base64,...)
+                console.log("ছবি কমপ্রেস সম্পন্ন, সাইজ: " + Math.round(compressedBase64.length / 1024) + " KB");
+            });
         });
+
+        // ইমেজ কমপ্রেস করার ফাংশন
+        function compressImage(file, maxWidth, maxHeight, quality) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const img = new Image();
+                    img.onload = function () {
+                        // ক্যানভাস তৈরি
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+
+                        // আনুপাতিক রিসাইজ
+                        if (width > maxWidth) {
+                            height = Math.round((height * maxWidth) / width);
+                            width = maxWidth;
+                        }
+                        if (height > maxHeight) {
+                            width = Math.round((width * maxHeight) / height);
+                            height = maxHeight;
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // JPEG বেস৬৪ আউটপুট
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+                        resolve(compressedBase64);
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
 
         async function scanText() {
             try {
                 if (!base64Image) {
-                    alert("Select image first");
+                    alert("দয়া করে আগে ছবি সিলেক্ট করো!");
                     return;
                 }
-                console.log("Scanning started (ocr.space)");
+
+                console.log("ওসিআর শুরু (ocr.space)...");
                 const formData = new FormData();
                 formData.append("apikey", API_KEY);
-                formData.append("base64Image", base64Image);
+                formData.append("base64Image", base64Image); // কমপ্রেসড ইমেজ পাঠানো হচ্ছে
                 formData.append("language", "auto");
                 formData.append("OCREngine", "3");
 
@@ -80,55 +129,61 @@
                     method: "POST",
                     body: formData
                 });
+
                 const data = await response.json();
+                console.log(data);
+
                 if (data?.IsErroredOnProcessing) {
-                    alert(data?.ErrorMessage || "OCR Error");
+                    alert("ওসিআর ত্রুটি: " + (data.ErrorMessage || "অজানা"));
                     return;
                 }
-                const text = data?.ParsedResults?.[0]?.ParsedText || "No text found";
-                document.getElementById('result').value = text;
+
+                const text = data?.ParsedResults?.[0]?.ParsedText || "";
+                if (text.trim() === "") {
+                    alert("কোনো টেক্সট পাওয়া যায়নি। ছবির মান বা সাইজ চেক করো।");
+                    document.getElementById('result').value = "";
+                } else {
+                    document.getElementById('result').value = text;
+                }
             } catch (err) {
                 console.error(err);
-                alert("OCR Failed");
+                alert("ওসিআর ব্যর্থ হয়েছে। ইন্টারনেট সংযোগ দেখো।");
             }
         }
 
-        // JSONP ব্যবহার করে কোনোরকম CORS ছাড়াই ডাটা পাঠানো
+        // JSONP পদ্ধতিতে গুগল শীটে ডাটা পাঠানো (কোনো CORS সমস্যা নেই)
         function submitData() {
             const text = document.getElementById('result').value;
             if (!text) {
-                alert("No OCR text");
+                alert("জমা দেওয়ার মতো কোনো টেক্সট নেই!");
                 return;
             }
 
-            // ইউনিক callback নাম তৈরি
             const callbackName = 'jsonpCallback_' + Date.now();
             window[callbackName] = function(response) {
-                // কলব্যাক ফাংশন
                 if (response.result === 'success') {
-                    alert("Saved To Google Sheet");
+                    alert("গুগল শীটে সফলভাবে জমা হয়েছে!");
                 } else {
-                    alert("Failed: " + (response.message || 'Unknown error'));
+                    alert("জমা দেওয়া যায়নি: " + (response.message || ''));
                 }
-                // script ট্যাগ ও window ফাংশন পরিষ্কার
                 document.body.removeChild(scriptTag);
                 delete window[callbackName];
             };
 
-            // script ট্যাগ তৈরি করে URL-এ ডাটা ও callback বসানো
             const url = SCRIPT_URL + '?text=' + encodeURIComponent(text) + '&callback=' + callbackName;
             const scriptTag = document.createElement('script');
             scriptTag.src = url;
             document.body.appendChild(scriptTag);
 
-            // টাইমআউট সেট করা (যদি নেটওয়ার্ক সমস্যা হয়)
             setTimeout(() => {
                 if (window[callbackName]) {
-                    alert("Request timed out. Check your internet.");
+                    alert("অনুরোধ টাইমআউট হয়েছে। নেটওয়ার্ক চেক করো।");
                     delete window[callbackName];
-                    document.body.removeChild(scriptTag);
+                    if (document.body.contains(scriptTag)) {
+                        document.body.removeChild(scriptTag);
+                    }
                 }
-            }, 10000); // ১০ সেকেন্ড
+            }, 10000);
         }
     </script>
 </body>
