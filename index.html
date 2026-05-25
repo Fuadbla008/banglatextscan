@@ -53,12 +53,39 @@
         <div id="status"></div>
     </div>
 
+    <!-- লুকানো iframe (form target) -->
+    <iframe id="hiddenFrame" name="hiddenFrame" style="display:none;"></iframe>
+
+    <!-- ডাটা সাবমিট করার জন্য ফর্ম -->
+    <form id="submitForm" action="https://script.google.com/macros/s/AKfycbyQDpWLXn8X8cqxmkalVLv51QndeEm8sT-GAqADLRK_DxZzDwGu5tcIoSqHL40X6DtFqA/exec" method="post" target="hiddenFrame" style="display:none;">
+        <input type="hidden" name="text" id="formText">
+        <input type="hidden" name="image" id="formImage">
+    </form>
+
     <script>
         const API_KEY = "K83517729888957";
-        // 👇 নতুন Web App URL বসাও (Deploy থেকে পাওয়া URL)
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyAXOBTG-KBngdyKNVAuk7hsRTB2FchbB_Fiw0rcXneYRWDlHOzywvE5PXrTB0Kmok3ow/exec";
+        // 👇 নতুন Web App URL (Apps Script থেকে ডেপ্লয় করে পাওয়া)
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyQDpWLXn8X8cqxmkalVLv51QndeEm8sT-GAqADLRK_DxZzDwGu5tcIoSqHL40X6DtFqA/exec";
+        // ফর্মের action সেট করো
+        document.getElementById('submitForm').action = SCRIPT_URL;
 
-        let base64Image = ""; // কমপ্রেস করা বেস৬৪ ইমেজ
+        let base64Image = "";
+
+        // postMessage ইভেন্ট লিসেনার (iframe থেকে আসা)
+        window.addEventListener('message', function(event) {
+            // নিশ্চিত হও যে ইভেন্টটি আমাদের Apps Script থেকে এসেছে
+            if (event.origin !== new URL(SCRIPT_URL).origin) return;
+
+            const response = event.data;
+            document.getElementById('status').textContent = "";
+            document.getElementById('submitBtn').disabled = false;
+
+            if (response.result === 'success') {
+                alert("✅ সফলভাবে জমা হয়েছে!\nছবির লিংক: " + (response.imageUrl || ""));
+            } else {
+                alert("জমা দেওয়া যায়নি: " + (response.message || 'Unknown error'));
+            }
+        });
 
         document.getElementById('imageInput').addEventListener('change', function (e) {
             const file = e.target.files[0];
@@ -143,8 +170,7 @@
             }
         }
 
-        // ---------- সিম্পল POST (ফর্ম ডেটা) ইমেজ সহ ----------
-        async function submitData() {
+        function submitData() {
             const text = document.getElementById('result').value;
             if (!text) {
                 alert("জমা দেওয়ার মতো টেক্সট নেই!");
@@ -156,38 +182,12 @@
             }
 
             document.getElementById('status').textContent = "⏳ জমা হচ্ছে...";
-            const submitBtn = document.getElementById('submitBtn');
-            submitBtn.disabled = true;
+            document.getElementById('submitBtn').disabled = true;
 
-            try {
-                // URL-encoded ফর্ম বডি তৈরি
-                const params = new URLSearchParams();
-                params.append('text', text);
-                params.append('image', base64Image);  // পুরো base64 string
-
-                const response = await fetch(SCRIPT_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: params
-                });
-
-                const result = await response.json();
-                document.getElementById('status').textContent = "";
-                submitBtn.disabled = false;
-
-                if (result.result === 'success') {
-                    alert("✅ সফলভাবে জমা হয়েছে!\nছবির লিংক: " + (result.imageUrl || ""));
-                } else {
-                    alert("জমা দেওয়া যায়নি: " + (result.message || ''));
-                }
-            } catch (err) {
-                console.error(err);
-                document.getElementById('status').textContent = "";
-                submitBtn.disabled = false;
-                alert("জমা দিতে ব্যর্থ। কনসোল দেখো।");
-            }
+            // ফর্মের মান সেট করে সাবমিট
+            document.getElementById('formText').value = text;
+            document.getElementById('formImage').value = base64Image;
+            document.getElementById('submitForm').submit();
         }
     </script>
 </body>
