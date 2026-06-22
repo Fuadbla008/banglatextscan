@@ -43,13 +43,13 @@
 </head>
 <body>
   <div class="box">
-    <h2>📷 বাংলা ওসিআর স্ক্যানার</h2>
+    <h2> bangla OCR scanner</h2>
     <input type="file" id="imageInput" accept="image/*" capture="environment">
     <br>
     <button onclick="scanText()">OCR Scan</button>
-    <button id="submitBtn" onclick="submitData()">গুগল শীটে জমা করো</button>
+    <button id="submitBtn" onclick="submitData()">store in google sheet</button>
     <img id="preview">
-    <textarea id="result" placeholder="ওসিআরের ফলাফল এখানে দেখাবে..."></textarea>
+    <textarea id="result" placeholder="ocr result will show here"></textarea>
     <div id="status"></div>
   </div>
 
@@ -60,17 +60,16 @@
       const file = e.target.files[0];
       if (!file) return;
 
-      // প্রিভিউ
+      // preview
       const reader = new FileReader();
       reader.onload = function() {
         document.getElementById('preview').src = reader.result;
       };
       reader.readAsDataURL(file);
 
-      // কমপ্রেস করে base64Image-এ রাখো
       compressImage(file, 1200, 1200, 0.7).then(compressed => {
         base64Image = compressed;
-        console.log('কমপ্রেস সাইজ: ' + Math.round(compressed.length / 1024) + ' KB');
+        console.log('compress size: ' + Math.round(compressed.length / 1024) + ' KB');
       });
     });
 
@@ -99,17 +98,17 @@
 
     async function scanText() {
       if (!base64Image) {
-        alert('দয়া করে আগে ছবি সিলেক্ট করো!');
+        alert('please select first!');
         return;
       }
-      document.getElementById('status').textContent = '⏳ ওসিআর চলছে...';
+      document.getElementById('status').textContent = 'ocr running...';
       try {
-        // server-side OCR কল
+        // server-side OCR call
         google.script.run
           .withSuccessHandler(function(text) {
             document.getElementById('status').textContent = '';
             if (!text.trim()) {
-              alert('কোনো টেক্সট পাওয়া যায়নি।');
+              alert('no text found।');
               document.getElementById('result').value = '';
             } else {
               document.getElementById('result').value = text;
@@ -117,27 +116,27 @@
           })
           .withFailureHandler(function(err) {
             document.getElementById('status').textContent = '';
-            alert('ওসিআর ব্যর্থ: ' + err.message);
+            alert('ocr failed: ' + err.message);
           })
           .processOCR(base64Image);
       } catch (err) {
         console.error(err);
-        alert('ওসিআর ব্যর্থ হয়েছে।');
+        alert('ocr failed।');
       }
     }
 
     function submitData() {
       const text = document.getElementById('result').value;
       if (!text) {
-        alert('জমা দেওয়ার মতো কোনো টেক্সট নেই!');
+        alert('empty text for store!');
         return;
       }
       if (!base64Image) {
-        alert('ছবি পাওয়া যায়নি। আবার ছবি সিলেক্ট করো।');
+        alert('no pictire are selected।');
         return;
       }
 
-      document.getElementById('status').textContent = '⏳ জমা হচ্ছে...';
+      document.getElementById('status').textContent = '⏳ storing...';
       document.getElementById('submitBtn').disabled = true;
 
       google.script.run
@@ -145,15 +144,15 @@
           document.getElementById('status').textContent = '';
           document.getElementById('submitBtn').disabled = false;
           if (response.result === 'success') {
-            alert('✅ সফলভাবে জমা হয়েছে!\nছবির লিংক: ' + (response.imageUrl || ''));
+            alert('✅ success !\npicture link: ' + (response.imageUrl || ''));
           } else {
-            alert('জমা দেওয়া যায়নি: ' + (response.message || ''));
+            alert('fail to send: ' + (response.message || ''));
           }
         })
         .withFailureHandler(function(err) {
           document.getElementById('status').textContent = '';
           document.getElementById('submitBtn').disabled = false;
-          alert('ত্রুটি: ' + err.message);
+          alert('error: ' + err.message);
         })
         .submitToSheet(text, base64Image);
     }
